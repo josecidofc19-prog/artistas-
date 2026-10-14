@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@theme {
+  --color-marinho: #1C2647;
+  --color-marinho-surface: #141B33;
+  --color-marinho-light: #2A3865;
+  --color-petroleo: #25B2C5;
+  --color-petroleo-hover: #1FA0B2;
+  --color-roxo: #6A4BBF;
+  --color-roxo-light: #8263D8;
+  --color-fundo: #F5F7FB;
+  --color-fundo-card: #FFFFFF;
+  --color-verde: #2E9E63;
+  --color-verde-dark: #237D4E;
+  --color-amarelo: #F2B705;
+  --color-amarelo-dark: #C69503;
+  --color-vermelho: #D64545;
+  --color-vermelho-dark: #B53636;
+}
+
+@layer base {
+  :root {
+    --bg-main: #F5F7FB;
+    --card-surface: #FFFFFF;
+    --text-primary: #1C2647;
+    --text-muted: #5C6784;
+    --border-subtle: #E2E8F0;
+  }
+
+  .dark {
+    --bg-main: #10162A;
+    --card-surface: #1C2647;
+    --text-primary: #F5F7FB;
+    --text-muted: #94A3B8;
+    --border-subtle: #2A3865;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Stage spotlight effect classes */
+.stage-spotlight {
+  background: radial-gradient(circle at 50% 0%, rgba(106, 75, 191, 0.28) 0%, rgba(37, 178, 197, 0.12) 40%, transparent 75%);
+}
+
+.stage-spotlight-teal {
+  background: radial-gradient(circle at 80% 20%, rgba(37, 178, 197, 0.20) 0%, transparent 60%);
+}
+
+.stage-spotlight-purple {
+  background: radial-gradient(circle at 20% 30%, rgba(106, 75, 191, 0.22) 0%, transparent 60%);
+}
+
+/* Accessible utility focus styles */
+.focus-ring {
+  outline: none;
+}
+.focus-ring:focus-visible {
+  outline: 2px solid #25B2C5;
+  outline-offset: 2px;
+}
