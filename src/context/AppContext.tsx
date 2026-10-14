@@ -9,17 +9,20 @@ import {
   StepId,
   DemoToast,
   DocumentStatus,
-  HistoricalSubmission
+  HistoricalSubmission,
+  AppView,
+  ProjectDraft
 } from '../types';
 import { getMockGrants } from '../data/mockGrants';
 import { 
   LUCAS_DEMO_USER, 
   getDefaultLucasDocuments, 
   getDefaultLucasApplication, 
-  calculateDocumentStatus 
+  calculateDocumentStatus,
+  findDocForRequirement 
 } from '../data/defaultVault';
 
-export type AppView = 'home' | 'catalog' | 'grant_detail' | 'vault' | 'checklist' | 'dashboard' | 'login' | 'register';
+export type { AppView };
 
 interface AppContextType {
   theme: 'light' | 'dark';
@@ -46,6 +49,11 @@ interface AppContextType {
   toast: DemoToast | null;
   showToast: (title: string, message: string, type?: 'success' | 'info' | 'warning') => void;
   
+  // Rascunho de Projeto
+  projectDraft: ProjectDraft;
+  updateProjectDraft: (updates: Partial<ProjectDraft>) => void;
+  updateUserProfile: (updates: Partial<User>) => void;
+
   // Ações de Negócio
   loginAsLucas: () => void;
   logout: () => void;
@@ -71,7 +79,6 @@ const STORAGE_KEYS = {
   GRANT_ID: 'cultura_em_cena_grant_id',
 };
 
-// Histórico realista para a demonstração de performance de Lucas / bandas independentes
 const INITIAL_HISTORICAL_SUBMISSIONS: HistoricalSubmission[] = [
   {
     id: 'sub-hist-1',
@@ -149,7 +156,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
-  // Grants catalog (12 editais calculados em tempo real)
+  // Grants catalog
   const [grants] = useState<Grant[]>(() => getMockGrants());
 
   // Selected grant
@@ -162,11 +169,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
-  // Vault documents
+  // Vault documents com migração segura de status dinâmico e IDs da demonstração
   const [vaultDocuments, setVaultDocuments] = useState<VaultDocument[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.VAULT);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: VaultDocument[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map(doc => {
+            // Migração determinística exclusivamente para os documentos da demonstração do Lucas
+            let requirementId = doc.requirementId;
+            if (!requirementId) {
+              if (doc.id === 'doc-lucas-1') requirementId = 'doc-req-rep';
+              else if (doc.id === 'doc-lucas-2') requirementId = 'doc-req-integrantes';
+              else if (doc.id === 'doc-lucas-3') requirementId = 'doc-req-residencia';
+            }
+
+            // O status é sempre recalculado dinamicamente a partir de expiryDate
+            const currentStatus = calculateDocumentStatus(doc.expiryDate);
+
+            return {
+              ...doc,
+              requirementId,
+              fileName: doc.fileName || `${doc.name.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 30)}.pdf`,
+              fileSize: doc.fileSize || '1.0 MB',
+              status: currentStatus,
+            };
+          });
+        }
+      }
       return getDefaultLucasDocuments();
     } catch {
       return getDefaultLucasDocuments();
@@ -194,7 +225,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
   const [toast, setToast] = useState<DemoToast | null>(null);
 
-  // Sync theme with HTML document
+  // Rascunho persistido do formulário de projeto
+  const [projectDraft, setProjectDraft] = useState<ProjectDraft>(() => {
+    try {
+      const saved = localStorage.getItem('cultura_em_cena_draft');
+      return saved ? JSON.parse(saved) : { identificacao: '', objetivos: '', publico: '', execucao: '', orcamento: '', stepAtual: 1 };
+    } catch {
+      return { identificacao: '', objetivos: '', publico: '', execucao: '', orcamento: '', stepAtual: 1 };
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('cultura_em_cena_draft', JSON.stringify(projectDraft));
+    } catch (e) {
+      console.warn('Erro ao salvar rascunho:', e);
+    }
+  }, [projectDraft]);
+
+  const updateProjectDraft = useCallback((updates: Partial<ProjectDraft>) => {
+    setProjectDraft(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  // Sincronização do tema no HTML
   useEffect(() => {
     try {
       if (theme === 'dark') {
@@ -208,7 +261,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [theme]);
 
-  // Sync storage for critical states
+  // Persistência com integridade
   useEffect(() => {
     try {
       if (user) {
@@ -287,10 +340,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 4500);
   }, []);
 
+  const updateUserProfile = useCallback((updates: Partial<User>) => {
+    setUser(prev => prev ? { ...prev, ...updates } : null);
+    showToast('Perfil atualizado', 'Suas configurações foram salvas.', 'success');
+  }, [showToast]);
+
   /**
    * REAVALIAÇÃO DE REQUISITOS DA INSCRIÇÃO:
-   * Calcula se a etapa 2 (Separar documentos) deve ser concluída
-   * e recalcula a porcentagem de progresso real (20% por etapa concluída).
+   * Utiliza findDocForRequirement estritamente por ID!
+   * Sem comparação por aproximação de nomes ou substring.
    */
   const evaluateApplicationProgress = useCallback((
     currentApp: Application, 
@@ -300,6 +358,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const grant = allGrants.find(g => g.id === currentApp.grantId);
     if (!grant) return currentApp;
 
+    // Exigências obrigatórias para o perfil
     const mandatoryRequirements = grant.requiredDocuments.filter(
       doc => doc.mandatory && doc.appliesToProfiles.includes(currentApp.profileType)
     );
@@ -310,17 +369,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       allMandatoryValid = true;
     } else {
       for (const req of mandatoryRequirements) {
-        const matchingDoc = documents.find(d => 
-          d.name.toLowerCase().includes(req.name.toLowerCase().substring(0, 15)) ||
-          req.name.toLowerCase().includes(d.name.toLowerCase().substring(0, 15))
-        );
+        // Encontra o documento vinculado pelo ID da exigência
+        const linkedDoc = findDocForRequirement(req, documents);
 
-        if (!matchingDoc) {
+        // Se não houver documento vinculado à exigência, etapa não é atendida
+        if (!linkedDoc) {
           allMandatoryValid = false;
           break;
         }
 
-        const status = calculateDocumentStatus(matchingDoc.expiryDate);
+        // Se o documento vinculado estiver vencido hoje, etapa não é atendida
+        const status = calculateDocumentStatus(linkedDoc.expiryDate);
         if (status === 'vencido') {
           allMandatoryValid = false;
           break;
@@ -351,8 +410,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   /**
-   * ATUALIZAÇÃO DE DOCUMENTO DO COFRE:
-   * Momento principal da demonstração!
+   * ATUALIZAÇÃO DE DOCUMENTO DO COFRE (DocUpdateModal):
+   * Preserva requirementId, atualiza addedDate, fileName, fileSize,
+   * recalcula status dinamicamente e atualiza imediatamente o checklist.
    */
   const updateVaultDocument = useCallback((id: string, updates: Partial<VaultDocument>) => {
     setVaultDocuments(prevDocs => {
@@ -363,31 +423,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return {
             ...doc,
             ...updates,
+            // Preserva requirementId original caso não venha no updates
+            requirementId: updates.requirementId !== undefined ? updates.requirementId : doc.requirementId,
             expiryDate: newExpiry,
             status: newStatus,
+            addedDate: updates.addedDate || new Date().toISOString(),
+            fileName: updates.fileName || doc.fileName,
+            fileSize: updates.fileSize || doc.fileSize,
           };
         }
         return doc;
       });
 
-      // Se há uma aplicação ativa, reavalia automaticamente o checklist!
+      // Reavaliação imediata da aplicação ativa
       setActiveApplication(prevApp => {
         if (!prevApp) return null;
         const prevDocStepCompleted = prevApp.steps.find(s => s.id === 'documentos')?.isCompleted;
         const newApp = evaluateApplicationProgress(prevApp, updatedDocs, grants);
         const newDocStepCompleted = newApp.steps.find(s => s.id === 'documentos')?.isCompleted;
 
-        // Se a etapa documental passou de pendente para concluída:
+        // Feedback visual do avanço 60% -> 80%
         if (!prevDocStepCompleted && newDocStepCompleted) {
           showToast(
             'Documento atualizado. Etapa concluída!',
-            `O comprovante foi renovado com sucesso e a etapa "Separar documentos" foi concluída (+20% de progresso)!`,
+            `A exigência foi validada com sucesso e a etapa "Separar documentos" avançou para concluída (+20% de progresso)!`,
             'success'
           );
         } else {
           showToast(
             'Documento atualizado',
-            'As informações do documento foram renovadas no cofre local.',
+            'As informações e a validade do documento foram salvas no cofre.',
             'info'
           );
         }
@@ -405,6 +470,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...newDocData,
       id: `doc-custom-${Date.now()}`,
       status,
+      addedDate: newDocData.addedDate || new Date().toISOString(),
     };
 
     setVaultDocuments(prev => {
@@ -416,7 +482,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return updated;
     });
 
-    showToast('Novo documento adicionado', `${newDoc.name} registrado no cofre local.`, 'success');
+    showToast('Documento adicionado', `${newDoc.name} registrado no cofre local.`, 'success');
   }, [evaluateApplicationProgress, grants, showToast]);
 
   const removeVaultDocument = useCallback((id: string) => {
@@ -438,7 +504,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (stepId === 'documentos') {
         showToast(
           'Etapa avaliada por documentos',
-          'Esta etapa depende da validade dos documentos exigidos no cofre.',
+          'Esta etapa depende exclusivamente da validade dos documentos obrigatórios vinculados no cofre.',
           'info'
         );
         return prevApp;
@@ -522,7 +588,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     showToast(
       'Demonstração carregada: Lucas',
-      'Conta de Lucas ativada com perfil Banda/Grupo (Indaiatuba).',
+      'Conta de Lucas ativada com perfil Banda ou grupo (Indaiatuba).',
       'success'
     );
   }, [selectedGrantId, showToast]);
@@ -578,7 +644,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         status: 'em_preparacao',
         steps: [
           { id: 'requisitos', title: '1. Conferir requisitos', description: 'Revisão das regras de elegibilidade e restrições.', isCompleted: true, isAutoCalculated: false },
-          { id: 'documentos', title: '2. Separar documentos', description: 'Conferência de todos os documentos obrigatórios.', isCompleted: false, isAutoCalculated: true },
+          { id: 'documentos', title: '2. Separar documentos', description: 'Conferência de todos os documentos obrigatórios vinculados ao edital.', isCompleted: false, isAutoCalculated: true },
           { id: 'portfolio', title: '3. Preparar portfólio', description: 'Reunião de trabalhos anteriores e links artísticos.', isCompleted: false, isAutoCalculated: false },
           { id: 'projeto', title: '4. Elaborar projeto', description: 'Redação da proposta cultural e planilha orçamentária.', isCompleted: false, isAutoCalculated: false },
           { id: 'envio', title: '5. Enviar inscrição', description: 'Revisão e envio do pacote para avaliação.', isCompleted: false, isAutoCalculated: false },
@@ -593,11 +659,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentView('checklist');
   }, [user, activeApplication, vaultDocuments, grants, evaluateApplicationProgress]);
 
+  /**
+   * REINICIAR DEMONSTRAÇÃO:
+   * Restaura com exatidão o cenário fixo e reproduzível de Lucas (60% inicial e comprovante vencido).
+   * Preserva documentos customizados de outros usuários caso existam.
+   */
   const resetDemoToInitialState = useCallback(() => {
     setUser(LUCAS_DEMO_USER);
     setSelectedProfileState('banda_grupo');
     setSelectedGrantIdState('edital-circulacao-musical-sp');
-    setVaultDocuments(getDefaultLucasDocuments());
+
+    // Restaura os 3 documentos originais de Lucas preservando eventuais documentos customizados criados por outros perfis
+    setVaultDocuments(prev => {
+      const customNonLucasDocs = prev.filter(d => !d.id.startsWith('doc-lucas-'));
+      return [...getDefaultLucasDocuments(), ...customNonLucasDocs];
+    });
+
     setActiveApplication(getDefaultLucasApplication());
     setSearchTerm('');
     setPrepModalOpen(false);
@@ -607,7 +684,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(LUCAS_DEMO_USER));
       localStorage.setItem(STORAGE_KEYS.PROFILE, 'banda_grupo');
       localStorage.setItem(STORAGE_KEYS.GRANT_ID, 'edital-circulacao-musical-sp');
-      localStorage.setItem(STORAGE_KEYS.VAULT, JSON.stringify(getDefaultLucasDocuments()));
       localStorage.setItem(STORAGE_KEYS.APPLICATION, JSON.stringify(getDefaultLucasApplication()));
     } catch (e) {
       console.warn('Erro ao restaurar demo:', e);
@@ -630,6 +706,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSelectedProfileState('artista_solo');
     setVaultDocuments(getDefaultLucasDocuments());
     setActiveApplication(null);
+    setProjectDraft({ identificacao: '', objetivos: '', publico: '', execucao: '', orcamento: '', stepAtual: 1 });
     setCurrentView('home');
     showToast('Dados locais excluídos', 'O armazenamento do navegador foi limpo.', 'info');
   }, [showToast]);
@@ -658,6 +735,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAuthModalMode,
     toast,
     showToast,
+    projectDraft,
+    updateProjectDraft,
+    updateUserProfile,
     loginAsLucas,
     logout,
     registerSimulatedUser,
@@ -688,6 +768,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     authModalMode,
     toast,
     showToast,
+    projectDraft,
+    updateProjectDraft,
+    updateUserProfile,
     loginAsLucas,
     logout,
     registerSimulatedUser,

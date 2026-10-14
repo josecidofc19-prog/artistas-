@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { X, UploadCloud, Calendar, FileText, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, UploadCloud, Calendar, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { VaultDocument } from '../types';
 import { useApp } from '../context/AppContext';
+import { getCivilDaysRemaining, calculateDocumentStatus } from '../data/defaultVault';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface DocUpdateModalProps {
   document: VaultDocument | null;
@@ -11,8 +13,6 @@ interface DocUpdateModalProps {
 export const DocUpdateModal: React.FC<DocUpdateModalProps> = ({ document: doc, onClose }) => {
   const { updateVaultDocument } = useApp();
 
-  if (!doc) return null;
-
   // Data futura padrão para renovação rápida (+180 dias)
   const defaultFutureDate = () => {
     const d = new Date();
@@ -20,168 +20,258 @@ export const DocUpdateModal: React.FC<DocUpdateModalProps> = ({ document: doc, o
     return d.toISOString().split('T')[0];
   };
 
-  const [name, setName] = useState(doc.name);
-  const [expiryDate, setExpiryDate] = useState(
-    doc.expiryDate ? doc.expiryDate.split('T')[0] : defaultFutureDate()
-  );
-  const [notes, setNotes] = useState(doc.notes || '');
-  const [simulatedFileName, setSimulatedFileName] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSimulatedFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setSimulatedFileName(e.target.files[0].name);
+  const [name, setName] = useState(doc?.name || '');
+  const [expiryDate, setExpiryDate] = useState(() => {
+    if (doc?.expiryDate) {
+      return doc.expiryDate.split('T')[0];
     }
+    return defaultFutureDate();
+  });
+  const [notes, setNotes] = useState(doc?.notes || '');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [simulatedFileName, setSimulatedFileName] = useState<string>(doc?.fileName || 'documento.pdf');
+  const [simulatedFileSize, setSimulatedFileSize] = useState<string>(doc?.fileSize || '1.0 MB');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+
+  // Atualiza os estados locais quando o doc muda
+  useEffect(() => {
+    if (doc) {
+      setName(doc.name);
+      setExpiryDate(doc.expiryDate ? doc.expiryDate.split('T')[0] : defaultFutureDate());
+      setNotes(doc.notes || '');
+      setSimulatedFileName(doc.fileName || 'documento.pdf');
+      setSimulatedFileSize(doc.fileSize || '1.0 MB');
+      setErrorMessage('');
+    }
+  }, [doc]);
+
+  // Hook de acessibilidade
+  const modalRef = useModalAccessibility(Boolean(doc), onClose, '#doc-update-expiry');
+
+  if (!doc) return null;
+
+  // Validação reativa da data de vencimento
+  const validateExpiry = (dateStr: string) => {
+    const daysRemaining = getCivilDaysRemaining(dateStr);
+    if (daysRemaining === null || daysRemaining < 0) {
+      setErrorMessage('Escolha uma data futura para renovar o documento');
+      return false;
+    }
+    setErrorMessage('');
+    return true;
   };
 
-  const handleQuickRenew = () => {
-    setExpiryDate(defaultFutureDate());
-    setSimulatedFileName('comprovante_recente_atualizado_2026.pdf');
+  const handleDateChange = (newDate: string) => {
+    setExpiryDate(newDate);
+    validateExpiry(newDate);
+  };
+
+  const handleQuickAddDays = (days: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    const dateStr = d.toISOString().split('T')[0];
+    setExpiryDate(dateStr);
+    setErrorMessage('');
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedFile(file);
+      setSimulatedFileName(file.name);
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      setSimulatedFileSize(`${sizeMB} MB`);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
+    
+    if (doc.expiryDate && !validateExpiry(expiryDate)) {
+      return;
+    }
 
-    const fullIsoDate = expiryDate ? new Date(`${expiryDate}T23:59:59`).toISOString() : null;
+    setIsSubmitting(true);
 
     setTimeout(() => {
       updateVaultDocument(doc.id, {
-        name,
-        expiryDate: fullIsoDate,
-        notes,
-        fileType: 'PDF',
+        name: name.trim() || doc.name,
+        expiryDate: doc.expiryDate ? `${expiryDate}T23:59:59Z` : null,
+        notes: notes.trim(),
+        fileName: simulatedFileName,
+        fileSize: simulatedFileSize,
       });
+
       setIsSubmitting(false);
       onClose();
     }, 250);
   };
 
+  const daysRemaining = getCivilDaysRemaining(expiryDate);
+  const isInvalidDate = Boolean(errorMessage);
+
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="doc-update-title"
     >
-      <div className="bg-white dark:bg-[#1C2647] text-[#1C2647] dark:text-white rounded-2xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200 dark:border-slate-700 relative">
+      <div 
+        ref={modalRef}
+        className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200/80 dark:border-white/10 relative my-8"
+      >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-lg focus-ring"
-          aria-label="Fechar"
+          className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-xl focus-ring min-w-[36px] min-h-[36px] flex items-center justify-center cursor-pointer transition-colors"
+          aria-label="Fechar janela de atualização"
         >
-          <X className="w-5 h-5" />
+          <X className="w-5 h-5" aria-hidden="true" />
         </button>
 
-        <div className="mb-6">
-          <span className="text-xs font-semibold tracking-wider uppercase text-[#25B2C5] block mb-1">
-            Cofre de Documentos
-          </span>
+        <div className="space-y-1.5 mb-6 pr-6">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20 font-mono">
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Atualização de Documento</span>
+          </div>
           <h2 id="doc-update-title" className="text-xl sm:text-2xl font-bold tracking-tight">
-            Atualizar e Renovar Documento
+            {doc.name}
           </h2>
-          <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
-            Simulação local. A renovação da validade reavalia automaticamente o checklist de inscrição.
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+            Atualize o vencimento ou substitua o arquivo digitalizado. Se este documento estiver vinculado ao edital ativo, o checklist será atualizado em tempo real.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Nome do Documento */}
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
-              Nome do Documento
+            <label 
+              htmlFor="doc-update-name" 
+              className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1"
+            >
+              Nome do Documento no Cofre *
             </label>
             <input
+              id="doc-update-name"
               type="text"
+              required
               value={name}
               onChange={e => setName(e.target.value)}
-              required
-              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-[#1C2647] dark:text-white focus-ring"
+              className="w-full px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white focus-ring"
             />
           </div>
 
+          {/* Validade */}
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                Data de Validade (Vencimento)
-              </label>
-              <button
-                type="button"
-                onClick={handleQuickRenew}
-                className="text-xs font-bold text-[#25B2C5] hover:underline"
-              >
-                + Renovar para 6 meses (Em dia)
-              </button>
-            </div>
-            <div className="relative">
+            <label 
+              htmlFor="doc-update-expiry" 
+              className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1"
+            >
+              Nova Data de Validade *
+            </label>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <input
+                id="doc-update-expiry"
                 type="date"
-                value={expiryDate}
-                onChange={e => setExpiryDate(e.target.value)}
                 required
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-[#1C2647] dark:text-white focus-ring"
+                value={expiryDate}
+                onChange={e => handleDateChange(e.target.value)}
+                className={`w-full sm:w-auto flex-1 px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus-ring font-mono ${
+                  isInvalidDate ? 'border-red-500 ring-1 ring-red-500' : 'border-slate-200 dark:border-white/10'
+                }`}
               />
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleQuickAddDays(90)}
+                  className="btn-secondary px-2.5 py-2 text-xs"
+                >
+                  +90 dias
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickAddDays(180)}
+                  className="btn-secondary px-2.5 py-2 text-xs"
+                >
+                  +180 dias
+                </button>
+              </div>
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-              Validades com mais de 30 dias à frente são consideradas com status "Em dia".
-            </p>
+
+            {isInvalidDate ? (
+              <p role="alert" className="text-xs font-semibold text-red-600 dark:text-red-400 mt-1.5 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                <span>{errorMessage}</span>
+              </p>
+            ) : (
+              <p className="text-xs text-slate-400 mt-1">
+                Validades com mais de 30 dias à frente são classificadas com status "Em dia".
+              </p>
+            )}
           </div>
 
+          {/* Substituir Arquivo */}
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
-              Substituir Arquivo Digitalizado (Simulação)
+            <label 
+              htmlFor="doc-update-file" 
+              className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1"
+            >
+              Substituir Arquivo Digitalizado (Simulação Local)
             </label>
-            <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-4 text-center hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors relative cursor-pointer">
+            <div className="border border-dashed border-slate-300 dark:border-white/15 rounded-2xl p-4 text-center hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors relative cursor-pointer">
               <input
+                id="doc-update-file"
                 type="file"
                 accept=".pdf,.png,.jpg,.jpeg"
-                onChange={handleSimulatedFileChange}
+                onChange={handleFileChange}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                aria-label="Selecionar arquivo digitalizado"
               />
-              <UploadCloud className="w-8 h-8 mx-auto text-slate-400 mb-1" aria-hidden="true" />
-              <p className="text-xs font-medium text-slate-700 dark:text-slate-200">
-                {simulatedFileName || 'Clique ou arraste um PDF ou imagem'}
+              <UploadCloud className="w-7 h-7 mx-auto text-slate-400 mb-1" aria-hidden="true" />
+              <p className="text-xs font-bold text-slate-900 dark:text-white">
+                {simulatedFileName}
               </p>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Nenhum arquivo real é enviado para a internet.
+              <p className="text-xs text-slate-400 mt-0.5">
+                Tamanho: {simulatedFileSize} · Armazenado localmente
               </p>
             </div>
           </div>
 
+          {/* Observações */}
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
-              Observações ou Número de Protocolo
+            <label 
+              htmlFor="doc-update-notes" 
+              className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1"
+            >
+              Observações ou Protocolo
             </label>
             <textarea
+              id="doc-update-notes"
               rows={2}
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="Ex: Conta de luz recente atestando sede da banda em Indaiatuba."
-              className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-[#1C2647] dark:text-white focus-ring"
+              placeholder="Ex: Conta de consumo recente atestando endereço em Indaiatuba."
+              className="w-full p-3 text-xs rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white focus-ring"
             />
           </div>
 
-          {/* Aviso de Privacidade e Não-Armazenamento Remoto */}
-          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0 text-[#F2B705] mt-0.5" />
-            <span>
-              <strong>Atenção:</strong> Esta é uma simulação didática local. Nenhum documento é transmitido para servidores remotos e a ferramenta não constitui custódia jurídica oficial.
-            </span>
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-2">
+          {/* Ações */}
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-white/5">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="btn-secondary px-4 py-2 text-xs"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="px-5 py-2 text-xs font-bold rounded-lg bg-[#25B2C5] text-[#1C2647] hover:bg-[#1FA0B2] transition-colors focus-ring shadow-xs flex items-center gap-1.5"
+              disabled={isSubmitting || isInvalidDate}
+              className="btn-primary px-5 py-2 text-xs focus-ring"
             >
-              <CheckCircle2 className="w-4 h-4" />
+              <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
               <span>Salvar e Atualizar Checklist</span>
             </button>
           </div>

@@ -79,6 +79,8 @@ export interface VaultDocument {
   expiryDate: string | null; // ISO String or null if permanent (e.g. portfolio)
   status: DocumentStatus; // Computed or explicit
   notes?: string;
+  requirementId?: string; // Vínculo estrito com GrantDocumentRequirement.id
+  fileName?: string; // Nome real do arquivo digitalizado
 }
 
 export type StepId = 'requisitos' | 'documentos' | 'portfolio' | 'projeto' | 'envio';
@@ -129,3 +131,28 @@ export interface OpportunityRecommendation {
   matchReasons: string[];
   urgencyLevel: 'alta' | 'media' | 'planejada';
 }
+
+export type AppView = 
+  | 'home' 
+  | 'catalog' 
+  | 'grant_detail' 
+  | 'vault' 
+  | 'checklist' 
+  | 'dashboard' 
+  | 'login' 
+  | 'register' 
+  | 'guia' 
+  | 'apoio' 
+  | 'como_funciona' 
+  | 'formulario_projeto' 
+  | 'perfil';
+
+export interface ProjectDraft {
+  identificacao: string;
+  objetivos: string;
+  publico: string;
+  execucao: string;
+  orcamento: string;
+  stepAtual: number;
+}
+

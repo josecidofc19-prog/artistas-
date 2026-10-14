@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Sun, 
   Moon, 
@@ -10,7 +11,12 @@ import {
   TrendingUp,
   FolderLock,
   ListTodo,
-  Compass
+  Compass,
+  BookOpen,
+  LifeBuoy,
+  Info,
+  Settings,
+  ChevronRight
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -32,15 +38,17 @@ export const Navbar: React.FC = () => {
 
   const navItems = [
     { id: 'home', label: 'Início', icon: Compass },
-    { id: 'catalog', label: 'Explorar editais', icon: Compass },
-    { id: 'vault', label: 'Cofre de documentos', icon: FolderLock },
+    { id: 'catalog', label: 'Editais', icon: Compass },
+    { id: 'vault', label: 'Cofre', icon: FolderLock },
+    { id: 'guia', label: 'Guia do Artista', icon: BookOpen },
+    { id: 'apoio', label: 'Apoio', icon: LifeBuoy },
+    { id: 'como_funciona', label: 'Como Funciona', icon: Info },
     { 
       id: 'checklist', 
-      label: 'Minha inscrição', 
+      label: 'Inscrição', 
       icon: ListTodo,
       badge: activeApplication ? `${activeApplication.progressPercentage}%` : null 
-    },
-    { id: 'dashboard', label: 'Performance', icon: TrendingUp },
+    }
   ];
 
   const handleNavClick = (viewId: any) => {
@@ -50,36 +58,37 @@ export const Navbar: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-30 bg-white/95 dark:bg-[#1C2647]/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors">
+    <header className="sticky top-0 z-30 bg-white/85 dark:bg-slate-950/85 backdrop-blur-md border-b border-slate-200/80 dark:border-white/5 transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between gap-8 h-16">
+        <div className="flex items-center justify-between gap-6 h-16">
           
-          {/* Zone 1: Wordmark puro (sem subtítulos ou tags adjacent) */}
+          {/* Logo e Marca */}
           <button
             onClick={() => handleNavClick('home')}
-            className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#1C2647] dark:text-white whitespace-nowrap shrink-0 hover:opacity-90 transition-opacity focus-ring"
+            className="flex items-center gap-2 text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white shrink-0 hover:opacity-90 transition-opacity focus-ring rounded-lg cursor-pointer"
           >
-            Cultura em Cena
+            <span className="w-2.5 h-2.5 rounded-full bg-teal-500" />
+            <span>Cultura em Cena</span>
           </button>
 
-          {/* Zone 2: 4–5 links de texto concisos em linha única */}
-          <nav className="hidden md:flex items-center gap-6 lg:gap-8 text-sm font-medium">
+          {/* Links de Navegação Desktop com indicador suave */}
+          <nav className="hidden lg:flex items-center gap-1 xl:gap-2 text-sm font-medium">
             {navItems.map(item => {
               const isActive = currentView === item.id;
               return (
                 <button
                   key={item.id}
                   onClick={() => handleNavClick(item.id)}
-                  className={`relative py-1 whitespace-nowrap shrink-0 transition-colors text-xs lg:text-sm ${
+                  className={`relative px-3 py-1.5 rounded-xl whitespace-nowrap text-xs xl:text-sm font-medium transition-colors cursor-pointer ${
                     isActive 
-                      ? 'text-[#25B2C5] font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-[#25B2C5]' 
-                      : 'text-slate-600 dark:text-slate-300 hover:text-[#1C2647] dark:hover:text-white'
+                      ? 'text-teal-600 dark:text-teal-400 font-semibold bg-teal-500/10 dark:bg-teal-500/15' 
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/60 dark:hover:bg-slate-800/50'
                   }`}
                 >
                   <span className="flex items-center gap-1.5">
                     {item.label}
                     {item.badge && (
-                      <span className="text-[10px] font-bold font-mono px-1.5 py-0.2 rounded bg-[#25B2C5]/15 text-[#25B2C5] dark:text-[#25B2C5]">
+                      <span className="text-xs font-bold font-mono px-1.5 py-0.5 rounded-md bg-teal-600 text-white dark:bg-teal-500 dark:text-slate-950">
                         {item.badge}
                       </span>
                     )}
@@ -89,38 +98,48 @@ export const Navbar: React.FC = () => {
             })}
           </nav>
 
-          {/* Zone 3: Ação primária / Estado do Usuário + Tema */}
-          <div className="flex items-center gap-3 shrink-0">
-            {/* Botão de Tema Claro/Escuro */}
-            <button
+          {/* Ações da Direita: Tema + Usuário / Login */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            {/* Alternador de Tema com spring */}
+            <motion.button
+              whileTap={{ scale: 0.92 }}
               onClick={toggleTheme}
-              className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus-ring"
+              className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus-ring cursor-pointer"
               aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
               title={theme === 'dark' ? 'Tema claro' : 'Tema escuro'}
             >
               {theme === 'dark' ? (
-                <Sun className="w-4 h-4 text-[#F2B705]" aria-hidden="true" />
+                <Sun className="w-4 h-4 text-amber-400" aria-hidden="true" />
               ) : (
-                <Moon className="w-4 h-4 text-[#1C2647]" aria-hidden="true" />
+                <Moon className="w-4 h-4 text-slate-700" aria-hidden="true" />
               )}
-            </button>
+            </motion.button>
 
             {user ? (
               <div className="hidden sm:flex items-center gap-2">
                 <button
                   onClick={() => handleNavClick('dashboard')}
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-[#1C2647] dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors focus-ring"
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-700 transition-colors focus-ring border border-slate-200/60 dark:border-white/5 cursor-pointer"
                   title="Acessar painel de performance de Lucas"
                 >
-                  <div className="w-2 h-2 rounded-full bg-[#2E9E63]" aria-hidden="true" />
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" aria-hidden="true" />
                   <span className="truncate max-w-[130px]">
                     {user.name} ({user.profileType === 'banda_grupo' ? 'Banda' : user.profileType})
                   </span>
                 </button>
 
                 <button
+                  onClick={() => handleNavClick('perfil')}
+                  className="p-2 text-slate-500 hover:text-teal-600 dark:hover:text-teal-400 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus-ring cursor-pointer"
+                  title="Configurações e Perfil"
+                  aria-label="Configurações e Perfil"
+                >
+                  <Settings className="w-4 h-4" aria-hidden="true" />
+                </button>
+
+                <button
                   onClick={logout}
-                  className="p-1.5 text-slate-500 hover:text-[#D64545] rounded-lg transition-colors focus-ring"
+                  className="p-2 text-slate-500 hover:text-red-500 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors focus-ring cursor-pointer"
                   title="Sair da conta"
                   aria-label="Sair da conta"
                 >
@@ -131,7 +150,7 @@ export const Navbar: React.FC = () => {
               <div className="hidden sm:flex items-center gap-2">
                 <button
                   onClick={loginAsLucas}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg text-[#1C2647] dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors whitespace-nowrap focus-ring"
+                  className="px-3 py-1.5 text-xs font-medium rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors whitespace-nowrap focus-ring cursor-pointer"
                 >
                   Entrar como Lucas
                 </button>
@@ -140,17 +159,17 @@ export const Navbar: React.FC = () => {
                     setAuthModalMode('register');
                     setAuthModalOpen(true);
                   }}
-                  className="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-[#25B2C5] text-[#1C2647] hover:bg-[#1FA0B2] transition-colors whitespace-nowrap shadow-xs focus-ring"
+                  className="btn-primary px-3.5 py-1.5 text-xs focus-ring"
                 >
                   Criar conta grátis
                 </button>
               </div>
             )}
 
-            {/* Menu Hambúrguer para Telas Pequenas (<= 768px e 375px) */}
+            {/* Menu Hambúrguer para Telas Pequenas */}
             <button
               onClick={() => setMobileMenuOpen(prev => !prev)}
-              className="md:hidden p-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg focus-ring"
+              className="lg:hidden p-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl focus-ring cursor-pointer"
               aria-label={mobileMenuOpen ? 'Fechar menu' : 'Abrir menu'}
               aria-expanded={mobileMenuOpen}
             >
@@ -160,77 +179,105 @@ export const Navbar: React.FC = () => {
         </div>
       </div>
 
-      {/* Gaveta Móvel Responsiva */}
-      {mobileMenuOpen && (
-        <div className="md:hidden bg-white dark:bg-[#1C2647] border-b border-slate-200 dark:border-slate-800 px-4 pt-2 pb-6 space-y-2 animate-in slide-in-from-top-4 duration-200">
-          <div className="flex flex-col space-y-1">
-            {navItems.map(item => (
-              <button
-                key={item.id}
-                onClick={() => handleNavClick(item.id)}
-                className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg text-sm font-medium ${
-                  currentView === item.id 
-                    ? 'bg-[#25B2C5]/15 text-[#25B2C5] font-bold' 
-                    : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
-              >
-                <span className="flex items-center gap-2.5">
-                  <item.icon className="w-4 h-4" />
-                  {item.label}
-                </span>
-                {item.badge && (
-                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-[#25B2C5]/20 text-[#25B2C5]">
-                    {item.badge}
+      {/* Gaveta Móvel com Framer Motion */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+            className="lg:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/5 px-4 pt-3 pb-6 space-y-3 overflow-hidden shadow-lg"
+          >
+            <div className="flex flex-col space-y-1">
+              {navItems.map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => handleNavClick(item.id)}
+                  className={`flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
+                    currentView === item.id 
+                      ? 'bg-teal-500/10 text-teal-600 dark:text-teal-400 font-bold' 
+                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <span className="flex items-center gap-3">
+                    <item.icon className="w-4 h-4 text-slate-400" />
+                    <span>{item.label}</span>
                   </span>
-                )}
-              </button>
-            ))}
-          </div>
+                  {item.badge && (
+                    <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-teal-600 text-white dark:bg-teal-500 dark:text-slate-950">
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
 
-          <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
-            {user ? (
-              <div className="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-lg">
-                <div className="text-xs">
-                  <p className="font-bold text-[#1C2647] dark:text-white">{user.name}</p>
-                  <p className="text-slate-500 dark:text-slate-400">{user.email}</p>
+            <div className="pt-3 border-t border-slate-100 dark:border-white/5 space-y-2">
+              {user ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 dark:border-white/5">
+                    <div className="text-xs">
+                      <p className="font-bold text-slate-900 dark:text-white">{user.name}</p>
+                      <p className="text-slate-500 dark:text-slate-400">{user.email}</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleNavClick('perfil')}
+                        className="p-1.5 text-slate-500 hover:text-teal-600 rounded-lg"
+                        title="Configurações e Perfil"
+                        aria-label="Configurações e Perfil"
+                      >
+                        <Settings className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          logout();
+                          setMobileMenuOpen(false);
+                        }}
+                        className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg"
+                        title="Sair"
+                        aria-label="Sair da conta"
+                      >
+                        <LogOut className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleNavClick('dashboard')}
+                    className="w-full py-2.5 text-xs font-bold text-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-200/80 transition-colors"
+                  >
+                    <TrendingUp className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                    <span>Acessar Painel de Performance</span>
+                  </button>
                 </div>
-                <button
-                  onClick={() => {
-                    logout();
-                    setMobileMenuOpen(false);
-                  }}
-                  className="p-1.5 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded"
-                  title="Sair"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <button
-                  onClick={() => {
-                    loginAsLucas();
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full py-2 text-xs font-bold text-center rounded-lg border border-slate-300 dark:border-slate-700 text-[#1C2647] dark:text-white"
-                >
-                  Entrar como Lucas
-                </button>
-                <button
-                  onClick={() => {
-                    setAuthModalMode('register');
-                    setAuthModalOpen(true);
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full py-2 text-xs font-bold text-center rounded-lg bg-[#25B2C5] text-[#1C2647]"
-                >
-                  Criar conta
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+              ) : (
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    onClick={() => {
+                      loginAsLucas();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="btn-secondary w-full py-2.5 text-xs text-center"
+                  >
+                    Entrar como Lucas
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAuthModalMode('register');
+                      setAuthModalOpen(true);
+                      setMobileMenuOpen(false);
+                    }}
+                    className="btn-primary w-full py-2.5 text-xs text-center"
+                  >
+                    Criar conta grátis
+                  </button>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
   );
 };

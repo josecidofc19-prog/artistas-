@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { 
   ArrowLeft, 
   Calendar, 
@@ -19,6 +20,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { getGrantDeadlineInfo } from '../data/mockGrants';
 import { ArtistProfileType } from '../types';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 export const GrantDetailPage: React.FC = () => {
   const { 
@@ -79,98 +81,109 @@ export const GrantDetailPage: React.FC = () => {
   const diagnosis = getEligibilityDiagnosis();
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-8 animate-in fade-in duration-200">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-8">
       
       {/* Botão Voltar */}
       <button
-        onClick={() => setCurrentView('catalog')}
-        className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-[#1C2647] dark:hover:text-white transition-colors focus-ring"
+        onClick={() => {
+          setCurrentView('catalog');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors focus-ring cursor-pointer"
       >
         <ArrowLeft className="w-4 h-4" />
         <span>Voltar ao catálogo de editais</span>
       </button>
 
-      {/* Cartão de Identificação Principal */}
-      <div className="p-6 sm:p-8 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141B33] shadow-sm space-y-6">
+      {/* Cartão Bento de Identificação Principal */}
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bento-card space-y-6"
+      >
         
-        {/* Metadados sem pill candy */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-          <span className="font-bold text-[#6A4BBF] dark:text-[#8263D8]">{grant.artisticArea}</span>
-          <span aria-hidden="true">·</span>
+        {/* Metadados */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-500 dark:text-slate-400">
+          <span className="font-semibold text-teal-600 dark:text-teal-400">{grant.artisticArea}</span>
+          <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
           <span className="flex items-center gap-1">
             <Building className="w-3.5 h-3.5" />
             {grant.sphere}
           </span>
-          <span aria-hidden="true">·</span>
+          <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
           <span className="flex items-center gap-1">
             <MapPin className="w-3.5 h-3.5" />
             {grant.city ? `${grant.city}, ${grant.state}` : `Estado de ${grant.state}`}
           </span>
-          <span aria-hidden="true">·</span>
-          <span className={`font-mono font-bold ${isClosed ? 'text-[#D64545]' : 'text-[#F2B705]'}`}>
+          <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
+          <span className={`font-mono font-semibold ${isClosed ? 'text-red-600 dark:text-red-400' : 'text-amber-500'}`}>
             {label}
           </span>
         </div>
 
         {/* Título do Edital */}
         <div className="space-y-2">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-[#1C2647] dark:text-white leading-tight">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-tight">
             {grant.title}
           </h1>
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300">
-            Publicado por: <strong className="text-[#1C2647] dark:text-white">{grant.issuingBody}</strong>
+            Publicado por: <strong className="text-slate-900 dark:text-white">{grant.issuingBody}</strong>
           </p>
         </div>
 
         {/* Tira de Valores e Prazos */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100 dark:border-white/5 text-xs">
           <div>
-            <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold block mb-0.5">
+            <span className="text-slate-400 uppercase tracking-wider text-xs font-semibold block mb-0.5">
               Valor por Projeto
             </span>
-            <p className="text-2xl font-extrabold text-[#1C2647] dark:text-white font-mono tabular-nums">
+            <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums">
               R$ {grant.grantValue.toLocaleString('pt-BR')},00
             </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">{grant.totalBudgetFormatted}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{grant.totalBudgetFormatted}</p>
           </div>
 
           <div>
-            <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold block mb-0.5">
+            <span className="text-slate-400 uppercase tracking-wider text-xs font-semibold block mb-0.5">
               Encerramento das Inscrições
             </span>
-            <p className="text-sm font-bold text-[#1C2647] dark:text-white font-mono">
+            <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white font-mono">
               {new Date(grant.deadlineDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
             </p>
-            <p className={`text-[11px] font-semibold font-mono ${isClosed ? 'text-[#D64545]' : 'text-[#F2B705]'}`}>
+            <p className={`text-xs font-semibold font-mono ${isClosed ? 'text-red-600 dark:text-red-400' : 'text-amber-500'}`}>
               {label}
             </p>
           </div>
 
           <div>
-            <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold block mb-0.5">
+            <span className="text-slate-400 uppercase tracking-wider text-xs font-semibold block mb-0.5">
               Enquadramento Legal
             </span>
-            <p className="text-sm font-bold text-[#1C2647] dark:text-white">
+            <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
               {grant.eligibleLegal.map(l => l.toUpperCase()).join(' · ')}
             </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5">
               {grant.eligibleProfiles.length} perfis aceitos
             </p>
           </div>
         </div>
 
         {/* Barra de Ações */}
-        <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-          <button
-            onClick={() => startPreparationForGrant(grant.id)}
+        <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-slate-100 dark:border-white/5">
+          <motion.button
+            whileHover={{ y: -1 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              startPreparationForGrant(grant.id);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
             disabled={isClosed}
-            className="px-6 py-3 text-xs sm:text-sm font-bold rounded-lg bg-[#25B2C5] text-[#1C2647] hover:bg-[#1FA0B2] disabled:opacity-50 transition-all focus-ring shadow-xs flex items-center gap-2 cursor-pointer"
+            className="btn-primary px-6 py-2.5 text-xs sm:text-sm focus-ring"
           >
             <Sparkles className="w-4 h-4" />
             <span>{isPreparingThis ? 'Continuar preparação (Checklist)' : 'Começar preparação'}</span>
-          </button>
+          </motion.button>
 
-          {/* Botão Ver edital oficial com fallback informativo */}
           <button
             onClick={() => {
               if (grant.officialUrl) {
@@ -179,34 +192,36 @@ export const GrantDetailPage: React.FC = () => {
                 setShowOfficialUrlInfo(true);
               }
             }}
-            className="px-4 py-3 text-xs sm:text-sm font-semibold rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus-ring flex items-center gap-2 cursor-pointer"
+            className="btn-secondary px-4 py-2.5 text-xs sm:text-sm focus-ring flex items-center gap-2"
           >
             <ExternalLink className="w-4 h-4 text-slate-400" />
             <span>Ver edital oficial</span>
           </button>
         </div>
 
-        {/* Aviso Fictício Obrigatório */}
-        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-          <strong>Identificação Fictícia:</strong> {grant.isFictitiousNotice}
+        {/* Aviso Fictício */}
+        <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-white/5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+          <strong className="text-slate-700 dark:text-slate-300">Identificação Fictícia:</strong> {grant.isFictitiousNotice}
         </div>
 
-      </div>
+      </motion.div>
 
-      {/* Diagnóstico de Elegibilidade para o Usuário Ativo */}
-      <div className="p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141B33] space-y-4 shadow-xs">
-        <div className="flex items-center justify-between">
+      {/* Diagnóstico de Elegibilidade */}
+      <div className="bento-card space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h2 className="text-base sm:text-lg font-bold text-[#1C2647] dark:text-white flex items-center gap-2">
-              <Shield className="w-5 h-5 text-[#25B2C5]" />
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Shield className="w-5 h-5 text-teal-600 dark:text-teal-400" />
               Diagnóstico de Elegibilidade
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Análise comparativa para o perfil de <strong>{activeProfile === 'banda_grupo' ? 'Banda ou grupo' : activeProfile}</strong>
             </p>
           </div>
-          <span className={`text-xs font-bold px-2.5 py-1 rounded ${
-            diagnosis.pending.length === 0 ? 'bg-[#2E9E63] text-[#1C2647]' : 'bg-[#F2B705] text-[#1C2647]'
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${
+            diagnosis.pending.length === 0 
+              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' 
+              : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
           }`}>
             {diagnosis.pending.length === 0 ? 'Alta compatibilidade' : 'Atenção aos requisitos'}
           </span>
@@ -214,15 +229,15 @@ export const GrantDetailPage: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs pt-2">
           {/* Requisitos Atendidos */}
-          <div className="p-4 rounded-xl bg-emerald-500/5 dark:bg-emerald-950/15 border border-[#2E9E63]/30 space-y-2">
-            <h3 className="font-bold text-[#2E9E63] flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+          <div className="p-4 rounded-xl bg-emerald-500/5 dark:bg-emerald-950/15 border border-emerald-500/20 space-y-2">
+            <h3 className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 uppercase tracking-wider text-xs">
               <CheckCircle2 className="w-4 h-4" />
               Requisitos que parecem atendidos
             </h3>
             <ul className="space-y-1.5 text-slate-700 dark:text-slate-300">
               {diagnosis.fulfilled.map((item, i) => (
                 <li key={i} className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#2E9E63] mt-1.5 shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
                   <span>{item}</span>
                 </li>
               ))}
@@ -230,8 +245,8 @@ export const GrantDetailPage: React.FC = () => {
           </div>
 
           {/* Pendências ou Restrições a Conferir */}
-          <div className="p-4 rounded-xl bg-amber-500/5 dark:bg-amber-950/15 border border-[#F2B705]/30 space-y-2">
-            <h3 className="font-bold text-[#F2B705] flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+          <div className="p-4 rounded-xl bg-amber-500/5 dark:bg-amber-950/15 border border-amber-500/20 space-y-2">
+            <h3 className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5 uppercase tracking-wider text-xs">
               <AlertTriangle className="w-4 h-4" />
               Pontos de atenção / Pendências conhecidas
             </h3>
@@ -239,7 +254,7 @@ export const GrantDetailPage: React.FC = () => {
               <ul className="space-y-1.5 text-slate-700 dark:text-slate-300">
                 {diagnosis.pending.map((item, i) => (
                   <li key={i} className="flex items-start gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#F2B705] mt-1.5 shrink-0" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0" />
                     <span>{item}</span>
                   </li>
                 ))}
@@ -258,34 +273,34 @@ export const GrantDetailPage: React.FC = () => {
         
         {/* Coluna Esquerda: Objetivo, Descrição e Restrições (2/3) */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141B33] space-y-4">
-            <h2 className="text-base font-bold text-[#1C2647] dark:text-white">
+          <div className="bento-card space-y-4">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
               Objetivo e Justificativa
             </h2>
             <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
               {grant.objective}
             </p>
-            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed pt-2 border-t border-slate-100 dark:border-slate-800">
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed pt-3 border-t border-slate-100 dark:border-white/5">
               {grant.description}
             </p>
           </div>
 
-          <div className="p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141B33] space-y-4">
-            <h2 className="text-base font-bold text-[#1C2647] dark:text-white">
+          <div className="bento-card space-y-4">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
               Público Elegível & Restrições Formais
             </h2>
-            <div className="space-y-2 text-xs text-slate-700 dark:text-slate-300">
+            <div className="space-y-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300">
               <p><strong>Público-Alvo:</strong> {grant.eligiblePublic}</p>
             </div>
 
-            <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+            <div className="pt-3 border-t border-slate-100 dark:border-white/5">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
                 Restrições Regulamentares
               </h3>
               <ul className="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
                 {grant.restrictions.map((res, i) => (
                   <li key={i} className="flex items-start gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#D64545] mt-1.5 shrink-0" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5 shrink-0" />
                     <span>{res}</span>
                   </li>
                 ))}
@@ -294,27 +309,29 @@ export const GrantDetailPage: React.FC = () => {
           </div>
 
           {/* Documentos Exigidos */}
-          <div className="p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141B33] space-y-4">
-            <h2 className="text-base font-bold text-[#1C2647] dark:text-white">
+          <div className="bento-card space-y-4">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
               Documentos Necessários Especificados no Edital
             </h2>
             <div className="space-y-3">
               {grant.requiredDocuments.map(doc => (
-                <div key={doc.id} className="p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-xs">
+                <div key={doc.id} className="p-3.5 rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-slate-800/40 text-xs">
                   <div className="flex items-center justify-between mb-1">
-                    <h3 className="font-bold text-[#1C2647] dark:text-white">
+                    <h3 className="font-bold text-slate-900 dark:text-white">
                       {doc.name}
                     </h3>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                      doc.mandatory ? 'bg-[#D64545] text-white' : 'bg-slate-200 text-slate-700'
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      doc.mandatory 
+                        ? 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20' 
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                     }`}>
                       {doc.mandatory ? 'Obrigatório' : 'Opcional'}
                     </span>
                   </div>
-                  <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed">
+                  <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed">
                     {doc.description}
                   </p>
-                  <p className="text-[10px] text-slate-500 mt-1">
+                  <p className="text-xs text-slate-400 mt-1">
                     Aplica-se a: {doc.appliesToProfiles.join(', ')}
                   </p>
                 </div>
@@ -325,21 +342,21 @@ export const GrantDetailPage: React.FC = () => {
 
         {/* Coluna Direita: Critérios de Avaliação (1/3) */}
         <div className="space-y-6">
-          <div className="p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141B33] space-y-4">
-            <h2 className="text-base font-bold text-[#1C2647] dark:text-white">
+          <div className="bento-card space-y-4">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
               Critérios de Avaliação e Pesos
             </h2>
             <div className="space-y-4">
               {grant.evaluationCriteria.map((crit, i) => (
-                <div key={i} className="text-xs space-y-1 pb-3 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0">
-                  <div className="flex items-center justify-between font-bold text-[#1C2647] dark:text-white">
+                <div key={i} className="text-xs space-y-1.5 pb-3 border-b border-slate-100 dark:border-white/5 last:border-0 last:pb-0">
+                  <div className="flex items-center justify-between font-bold text-slate-900 dark:text-white">
                     <span>{crit.title}</span>
-                    <span className="font-mono text-[#25B2C5]">{crit.weight}%</span>
+                    <span className="font-mono text-teal-600 dark:text-teal-400">{crit.weight}%</span>
                   </div>
                   <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                    <div style={{ width: `${crit.weight}%` }} className="h-full bg-[#25B2C5] rounded-full" />
+                    <div style={{ width: `${crit.weight}%` }} className="h-full bg-teal-600 dark:bg-teal-500 rounded-full" />
                   </div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed pt-0.5">
+                  <p className="text-xs text-slate-500 leading-relaxed pt-0.5">
                     {crit.description}
                   </p>
                 </div>
@@ -352,33 +369,51 @@ export const GrantDetailPage: React.FC = () => {
 
       {/* Modal Educado quando o usuário clica em "Ver edital oficial" */}
       {showOfficialUrlInfo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white dark:bg-[#1C2647] text-[#1C2647] dark:text-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 relative">
-            <button
-              onClick={() => setShowOfficialUrlInfo(false)}
-              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <div className="w-10 h-10 rounded-full bg-[#25B2C5]/20 text-[#25B2C5] flex items-center justify-center mb-3">
-              <HelpCircle className="w-5 h-5" />
-            </div>
-            <h3 className="text-lg font-bold mb-2">Endereço Oficial Não Aplicável</h3>
-            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-6">
-              Este edital é um <strong>registro didático modelado para a feira universitária</strong>. Não inventamos links para sites governamentais fictícios. Todas as regras, exigências e cálculos de pontuação estão disponíveis nesta própria interface para testes de ponta a ponta.
-            </p>
-            <div className="flex justify-end">
-              <button
-                onClick={() => setShowOfficialUrlInfo(false)}
-                className="px-4 py-2 text-xs font-bold rounded-lg bg-[#25B2C5] text-[#1C2647]"
-              >
-                Entendido
-              </button>
-            </div>
-          </div>
-        </div>
+        <OfficialUrlInfoModal onClose={() => setShowOfficialUrlInfo(false)} />
       )}
 
+    </div>
+  );
+};
+
+const OfficialUrlInfoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const modalRef = useModalAccessibility(true, onClose, '#understand-official-btn');
+
+  return (
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="official-modal-title"
+    >
+      <div 
+        ref={modalRef}
+        className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200/80 dark:border-white/10 relative space-y-4"
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-lg focus-ring min-w-[36px] min-h-[36px] flex items-center justify-center cursor-pointer"
+          aria-label="Fechar aviso de edital oficial"
+        >
+          <X className="w-5 h-5" aria-hidden="true" />
+        </button>
+        <div className="w-10 h-10 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center mb-1">
+          <HelpCircle className="w-5 h-5" aria-hidden="true" />
+        </div>
+        <h3 id="official-modal-title" className="text-lg font-bold">Endereço Oficial Não Aplicável</h3>
+        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+          Este edital é um <strong>registro didático modelado para a feira universitária</strong>. Não inventamos links para sites governamentais fictícios. Todas as regras, exigências e cálculos de pontuação estão disponíveis nesta própria interface para testes de ponta a ponta.
+        </p>
+        <div className="flex justify-end pt-2">
+          <button
+            id="understand-official-btn"
+            onClick={onClose}
+            className="btn-primary px-4 py-2 text-xs focus-ring"
+          >
+            Entendido
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { 
   CheckCircle2, 
   Circle, 
@@ -11,12 +12,19 @@ import {
   Sparkles,
   ExternalLink,
   ShieldAlert,
-  Edit3
+  Edit3,
+  AlertCircle
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getGrantDeadlineInfo } from '../data/mockGrants';
 import { DocUpdateModal } from './DocUpdateModal';
-import { VaultDocument } from '../types';
+import { VaultDocument, ArtistProfileType } from '../types';
+import { 
+  findDocForRequirement, 
+  calculateDocumentStatus, 
+  isExpiringBeforeGrantDeadline, 
+  formatDayMonth 
+} from '../data/defaultVault';
 
 export const ChecklistPage: React.FC = () => {
   const { 
@@ -26,7 +34,9 @@ export const ChecklistPage: React.FC = () => {
     submitApplicationForReview,
     vaultDocuments,
     setCurrentView,
-    setSelectedGrantId
+    setSelectedGrantId,
+    user,
+    selectedProfile
   } = useApp();
 
   const [documentToUpdate, setDocumentToUpdate] = useState<VaultDocument | null>(null);
@@ -34,17 +44,17 @@ export const ChecklistPage: React.FC = () => {
   if (!activeApplication) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center space-y-4">
-        <h2 className="text-xl font-bold text-[#1C2647] dark:text-white">
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white">
           Nenhuma inscrição em preparação no momento
         </h2>
-        <p className="text-sm text-slate-600 dark:text-slate-300">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Escolha um edital no catálogo para iniciar o checklist passo a passo.
         </p>
         <button
           onClick={() => setCurrentView('catalog')}
-          className="px-4 py-2 text-xs font-bold rounded-lg bg-[#25B2C5] text-[#1C2647]"
+          className="btn-primary px-5 py-2.5 text-xs min-h-[44px]"
         >
-          Explorar editais
+          Explorar catálogo de editais
         </button>
       </div>
     );
@@ -53,33 +63,61 @@ export const ChecklistPage: React.FC = () => {
   const currentGrant = grants.find(g => g.id === activeApplication.grantId) || grants[0];
   const { isClosed, daysRemaining, label } = getGrantDeadlineInfo(currentGrant.deadlineDate);
 
-  // Documentos obrigatórios deste edital para o perfil atual
+  const getProfileLabel = (profile: ArtistProfileType) => {
+    switch (profile) {
+      case 'artista_solo': return 'Artista solo';
+      case 'banda_grupo': return 'Banda ou grupo';
+      case 'coletivo_cultural': return 'Coletivo cultural';
+      case 'produtor_cultural': return 'Produtor cultural';
+      default: return profile;
+    }
+  };
+
+  // Exigências obrigatórias deste edital para o perfil real do artista
   const mandatoryDocsForProfile = currentGrant.requiredDocuments.filter(
     doc => doc.mandatory && doc.appliesToProfiles.includes(activeApplication.profileType)
   );
 
-  // Documento vencido no cofre
-  const expiredDoc = vaultDocuments.find(d => d.status === 'vencido');
   const isDocStepComplete = activeApplication.steps.find(s => s.id === 'documentos')?.isCompleted;
 
-  // Próxima ação recomendada dinâmica
+  // Próxima ação recomendada dinâmica baseada nos dados reais
   const getNextRecommendedAction = () => {
-    if (!isDocStepComplete && expiredDoc) {
+    // 1. Procura exigência obrigatória com documento vinculado vencido
+    const expiredReqItem = mandatoryDocsForProfile.find(req => {
+      const doc = findDocForRequirement(req, vaultDocuments);
+      return doc && calculateDocumentStatus(doc.expiryDate) === 'vencido';
+    });
+
+    if (expiredReqItem) {
+      const linkedDoc = findDocForRequirement(expiredReqItem, vaultDocuments);
       return {
-        title: 'Atualizar comprovante de residência vencido',
-        description: 'Seu comprovante de residência está expirado no cofre. Ao renová-lo, a etapa documental será aprovada automaticamente.',
-        actionLabel: 'Renovar comprovante agora',
-        action: () => setDocumentToUpdate(expiredDoc),
+        title: `Atualizar documento vencido: ${linkedDoc?.name || expiredReqItem.name}`,
+        description: `O documento vinculado "${linkedDoc?.name || expiredReqItem.name}" está expirado no cofre. Ao renová-lo com uma data futura, a etapa documental será concluída automaticamente.`,
+        actionLabel: 'Renovar documento agora',
+        action: () => linkedDoc && setDocumentToUpdate(linkedDoc),
         isUrgent: true,
       };
     }
 
+    // 2. Procura exigência obrigatória sem documento vinculado
+    const missingReqItem = mandatoryDocsForProfile.find(req => !findDocForRequirement(req, vaultDocuments));
+    if (missingReqItem) {
+      return {
+        title: `Vincular documento obrigatório: ${missingReqItem.name}`,
+        description: `O edital exige a apresentação de "${missingReqItem.name}". Adicione ou vincule um documento válido no seu cofre.`,
+        actionLabel: 'Ir ao cofre de documentos',
+        action: () => setCurrentView('vault'),
+        isUrgent: true,
+      };
+    }
+
+    // 3. Demais etapas pendentes do checklist
     const firstPending = activeApplication.steps.find(s => !s.isCompleted);
     if (!firstPending) {
       return {
         title: 'Inscrição 100% pronta para envio',
-        description: 'Todas as 5 etapas foram finalizadas com sucesso. Clique no botão abaixo para enviar para a revisão simulada.',
-        actionLabel: 'Enviar para revisão',
+        description: 'Todas as etapas foram finalizadas com sucesso. Clique no botão abaixo para enviar para a revisão simulada.',
+        actionLabel: 'Enviar para revisão simulada',
         action: () => submitApplicationForReview(),
         isUrgent: false,
       };
@@ -88,7 +126,7 @@ export const ChecklistPage: React.FC = () => {
     if (firstPending.id === 'envio') {
       return {
         title: 'Revisar dossiê final e submeter',
-        description: 'Requisitos conferidos, documentos em dia, portfólio montado e projeto redigido. Agora basta enviar para a banca simulada.',
+        description: 'Requisitos conferidos, documentos válidos no cofre, portfólio pronto e projeto redigido. Agora basta enviar para a banca simulada.',
         actionLabel: 'Enviar para revisão simulada',
         action: () => submitApplicationForReview(),
         isUrgent: false,
@@ -107,29 +145,33 @@ export const ChecklistPage: React.FC = () => {
   const nextAction = getNextRecommendedAction();
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-8 animate-in fade-in duration-200">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-8">
       
       {/* Cabeçalho da Inscrição */}
-      <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 border-b border-slate-200 dark:border-slate-800 pb-6">
+      <motion.div 
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col md:flex-row md:items-start justify-between gap-6 border-b border-slate-200/80 dark:border-white/5 pb-8"
+      >
         <div className="space-y-2">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[#25B2C5]">
-            <FileCheck className="w-4 h-4" />
-            <span>MINHA INSCRIÇÃO & CHECKLIST PREPARATÓRIO</span>
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20 font-mono uppercase">
+            <FileCheck className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+            <span>Inscrição & Checklist Preparatório</span>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1C2647] dark:text-white leading-tight">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-tight">
             {currentGrant.title}
           </h1>
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
-            <span>Órgão: <strong className="text-[#1C2647] dark:text-white">{currentGrant.issuingBody}</strong></span>
-            <span aria-hidden="true">·</span>
-            <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500 dark:text-slate-400">
+            <span>Órgão: <strong className="text-slate-800 dark:text-slate-200">{currentGrant.issuingBody}</strong></span>
+            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
+            <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold tabular-nums">
               R$ {currentGrant.grantValue.toLocaleString('pt-BR')},00
             </span>
-            <span aria-hidden="true">·</span>
-            <span className="flex items-center gap-1 font-mono text-[#F2B705] font-semibold">
-              <Clock className="w-3.5 h-3.5" />
+            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
+            <span className="flex items-center gap-1 font-mono text-amber-500 font-semibold">
+              <Clock className="w-3.5 h-3.5" aria-hidden="true" />
               {label}
             </span>
           </div>
@@ -141,7 +183,7 @@ export const ChecklistPage: React.FC = () => {
               setSelectedGrantId(currentGrant.id);
               setCurrentView('grant_detail');
             }}
-            className="px-3.5 py-2 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus-ring"
+            className="btn-secondary px-4 py-2 text-xs focus-ring min-h-[42px]"
           >
             Ver regulamento
           </button>
@@ -149,60 +191,75 @@ export const ChecklistPage: React.FC = () => {
           <button
             onClick={submitApplicationForReview}
             disabled={activeApplication.status === 'revisao_solicitada'}
-            className="px-4 py-2 text-xs font-bold rounded-lg bg-[#25B2C5] text-[#1C2647] hover:bg-[#1FA0B2] disabled:opacity-60 transition-colors focus-ring shadow-xs flex items-center gap-1.5 cursor-pointer"
+            className="btn-primary px-4 py-2 text-xs focus-ring min-h-[42px]"
           >
-            <Send className="w-3.5 h-3.5" />
+            <Send className="w-3.5 h-3.5" aria-hidden="true" />
             <span>{activeApplication.status === 'revisao_solicitada' ? 'Em revisão simulada' : 'Enviar para revisão'}</span>
           </button>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Cartão de Progresso & Próxima Ação (Momento Central da Demonstração) */}
-      <div className="p-6 sm:p-8 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141B33] shadow-sm space-y-6">
+      {/* Cartão Bento de Progresso & Próxima Ação */}
+      <motion.div 
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+        className="bento-card space-y-6"
+      >
         
-        {/* Barra de Progresso com Transição Suave (150-250ms) */}
+        {/* Barra de Progresso Animada com Framer Motion */}
         <div>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-3">
             <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Progresso Geral da Preparação
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Progresso da Inscrição
               </span>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 5 etapas ponderadas com peso de 20% cada uma
               </p>
             </div>
             <div className="text-right">
-              <span className="text-3xl font-extrabold text-[#1C2647] dark:text-white font-mono tabular-nums">
+              <motion.span 
+                key={activeApplication.progressPercentage}
+                initial={{ scale: 1.15 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                className="text-3xl sm:text-4xl font-extrabold font-mono tabular-nums inline-block text-slate-900 dark:text-white"
+              >
                 {activeApplication.progressPercentage}%
-              </span>
-              <p className="text-[11px] font-semibold text-[#25B2C5]">
+              </motion.span>
+              <p className="text-xs font-semibold text-teal-600 dark:text-teal-400">
                 {activeApplication.steps.filter(s => s.isCompleted).length} de 5 concluídas
               </p>
             </div>
           </div>
 
-          <div className="h-4 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden p-0.5 border border-slate-200/50 dark:border-slate-700/50">
-            <div
-              style={{ width: `${activeApplication.progressPercentage}%` }}
-              className="h-full rounded-full bg-gradient-to-r from-[#25B2C5] to-[#2E9E63] transition-all duration-300 ease-out shadow-xs"
+          <div className="h-3 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden p-0.5 border border-slate-200/50 dark:border-white/5">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${activeApplication.progressPercentage}%` }}
+              transition={{ type: "spring", stiffness: 90, damping: 16 }}
+              className="h-full rounded-full bg-teal-600 dark:bg-teal-500 shadow-sm"
             />
           </div>
         </div>
 
         {/* Bloco de Próxima Ação Recomendada */}
-        <div className={`p-5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
+        <div className={`p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
           nextAction.isUrgent 
-            ? 'border-[#D64545]/40 bg-red-500/5 dark:bg-red-950/20' 
-            : 'border-[#25B2C5]/30 bg-[#25B2C5]/5 dark:bg-[#25B2C5]/10'
+            ? 'border-red-500/25 bg-red-50/60 dark:bg-red-950/20' 
+            : 'border-teal-500/25 bg-teal-50/50 dark:bg-teal-950/20'
         }`}>
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <span className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-                nextAction.isUrgent ? 'bg-[#D64545] text-white' : 'bg-[#25B2C5] text-[#1C2647]'
+              <span className={`text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                nextAction.isUrgent 
+                  ? 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20' 
+                  : 'bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20'
               }`}>
-                {nextAction.isUrgent ? 'Ação Crítica' : 'Próxima Ação Recomendada'}
+                {nextAction.isUrgent ? 'Ação Crítica' : 'Próxima Ação'}
               </span>
-              <h3 className="text-sm font-bold text-[#1C2647] dark:text-white">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                 {nextAction.title}
               </h3>
             </div>
@@ -211,39 +268,50 @@ export const ChecklistPage: React.FC = () => {
             </p>
           </div>
 
-          <button
+          <motion.button
+            whileHover={{ y: -1 }}
+            whileTap={{ scale: 0.98 }}
             onClick={nextAction.action}
-            className={`px-4 py-2.5 text-xs font-bold rounded-lg transition-all focus-ring shadow-xs whitespace-nowrap flex items-center gap-1.5 self-start sm:self-auto cursor-pointer ${
+            className={`px-4 py-2.5 text-xs font-semibold rounded-xl transition-all focus-ring shadow-xs whitespace-nowrap flex items-center gap-1.5 self-start sm:self-auto cursor-pointer min-h-[42px] ${
               nextAction.isUrgent 
-                ? 'bg-[#D64545] text-white hover:bg-[#B53636]' 
-                : 'bg-[#25B2C5] text-[#1C2647] hover:bg-[#1FA0B2]'
+                ? 'bg-red-600 text-white hover:bg-red-700' 
+                : 'btn-primary'
             }`}
           >
             <span>{nextAction.actionLabel}</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+            <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+          </motion.button>
         </div>
 
-      </div>
+      </motion.div>
 
       {/* Lista das 5 Etapas do Checklist */}
       <div className="space-y-4">
-        <h2 className="text-lg font-bold text-[#1C2647] dark:text-white">
+        <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">
           Etapas da Inscrição (20% cada)
         </h2>
 
-        <div className="space-y-3">
+        <div className="space-y-3.5">
           {activeApplication.steps.map((step, index) => {
             const isDocStep = step.id === 'documentos';
             const isEnvioStep = step.id === 'envio';
 
             return (
-              <div
+              <motion.div
                 key={step.id}
-                className={`p-5 rounded-xl border transition-all ${
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ 
+                  type: "spring", 
+                  stiffness: 300, 
+                  damping: 24, 
+                  delay: index * 0.04 
+                }}
+                whileHover={{ y: -2 }}
+                className={`p-6 rounded-2xl sm:rounded-3xl border transition-all ${
                   step.isCompleted
-                    ? 'border-[#2E9E63]/30 bg-emerald-500/5 dark:bg-emerald-950/15'
-                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141B33]'
+                    ? 'border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/15'
+                    : 'border-slate-200/80 dark:border-white/5 bg-white dark:bg-slate-900'
                 }`}
               >
                 <div className="flex items-start justify-between gap-4">
@@ -251,22 +319,22 @@ export const ChecklistPage: React.FC = () => {
                     <button
                       onClick={() => toggleChecklistStep(step.id)}
                       disabled={isDocStep}
-                      className={`mt-0.5 shrink-0 rounded-full transition-colors focus-ring ${
+                      className={`mt-0.5 shrink-0 rounded-full transition-colors focus-ring min-w-[36px] min-h-[36px] flex items-center justify-center ${
                         isDocStep ? 'cursor-default' : 'cursor-pointer hover:opacity-80'
                       }`}
                       aria-label={step.isCompleted ? `Marcar ${step.title} como pendente` : `Marcar ${step.title} como concluída`}
                     >
                       {step.isCompleted ? (
-                        <CheckCircle2 className="w-6 h-6 text-[#2E9E63]" />
+                        <CheckCircle2 className="w-6 h-6 text-emerald-500" aria-hidden="true" />
                       ) : (
-                        <Circle className="w-6 h-6 text-slate-300 dark:text-slate-600" />
+                        <Circle className="w-6 h-6 text-slate-300 dark:text-slate-600" aria-hidden="true" />
                       )}
                     </button>
 
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 space-y-1.5">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className={`text-base font-bold leading-tight ${
-                          step.isCompleted ? 'text-[#1C2647] dark:text-white' : 'text-slate-800 dark:text-slate-200'
+                          step.isCompleted ? 'text-slate-900 dark:text-white' : 'text-slate-800 dark:text-slate-200'
                         }`}>
                           {step.title}
                         </h3>
@@ -274,58 +342,89 @@ export const ChecklistPage: React.FC = () => {
                           (20%)
                         </span>
                         {isDocStep && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-white/5">
                             Avaliação automática por validade do cofre
                           </span>
                         )}
                       </div>
 
-                      <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+                      <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                         {step.description}
                       </p>
 
                       {/* Detalhes específicos da Etapa 2 (Documental) */}
                       {isDocStep && (
-                        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
-                          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                            Documentos Obrigatórios Exigidos para Banda/Grupo:
+                        <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 space-y-3">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                            Documentos Obrigatórios Exigidos para {getProfileLabel(activeApplication.profileType)}:
                           </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                             {mandatoryDocsForProfile.map(req => {
-                              // Verifica no cofre
-                              const match = vaultDocuments.find(d => 
-                                d.name.toLowerCase().includes(req.name.toLowerCase().substring(0, 15)) ||
-                                req.name.toLowerCase().includes(d.name.toLowerCase().substring(0, 15))
-                              );
-                              const isDocExpired = match?.status === 'vencido';
+                              const match = findDocForRequirement(req, vaultDocuments);
+                              const docStatus = match ? calculateDocumentStatus(match.expiryDate) : null;
+                              const isDocExpired = docStatus === 'vencido';
+                              const isExpiringBeforeDeadline = match && isExpiringBeforeGrantDeadline(match.expiryDate, currentGrant.deadlineDate);
 
                               return (
                                 <div 
                                   key={req.id}
-                                  className={`p-2.5 rounded-lg border text-xs flex items-center justify-between gap-2 ${
-                                    isDocExpired 
-                                      ? 'border-[#D64545]/40 bg-red-500/5 text-red-900 dark:text-red-300' 
-                                      : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/40 text-slate-700 dark:text-slate-200'
+                                  className={`p-3.5 rounded-xl border text-xs flex flex-col justify-between gap-2.5 ${
+                                    !match 
+                                      ? 'border-slate-200/80 dark:border-white/5 bg-slate-50 dark:bg-slate-800/40 text-slate-500'
+                                      : isDocExpired 
+                                        ? 'border-red-500/30 bg-red-50/50 dark:bg-red-950/20 text-red-900 dark:text-red-300' 
+                                        : 'border-slate-200/80 dark:border-white/5 bg-white dark:bg-slate-800/40 text-slate-900 dark:text-white'
                                   }`}
                                 >
-                                  <div className="min-w-0 flex-1">
-                                    <p className="font-semibold truncate">{req.name}</p>
-                                    <p className="text-[10px] text-slate-500">
-                                      {match ? (isDocExpired ? 'Expirado no cofre' : 'Válido no cofre') : 'Ausente no cofre'}
+                                  <div>
+                                    <p className="font-bold text-slate-900 dark:text-white">{req.name}</p>
+                                    <p className="text-xs text-slate-500 mt-0.5">
+                                      {match 
+                                        ? `Vinculado: ${match.name}`
+                                        : 'Nenhum documento vinculado com este requisito'}
                                     </p>
+
+                                    {isExpiringBeforeDeadline && !isDocExpired && (
+                                      <p className="text-xs font-semibold text-amber-500 mt-1.5 flex items-center gap-1">
+                                        <AlertCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                                        <span>
+                                          Vence antes do edital ({formatDayMonth(match.expiryDate)}). Renove antes de enviar.
+                                        </span>
+                                      </p>
+                                    )}
                                   </div>
 
-                                  {match && isDocExpired && (
-                                    <button
-                                      onClick={() => setDocumentToUpdate(match)}
-                                      className="px-2 py-1 text-[11px] font-bold rounded bg-[#D64545] text-white hover:bg-[#B53636] shrink-0"
-                                    >
-                                      Atualizar
-                                    </button>
-                                  )}
-                                  {match && !isDocExpired && (
-                                    <CheckCircle2 className="w-4 h-4 text-[#2E9E63] shrink-0" />
-                                  )}
+                                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-white/5">
+                                    <span className="text-xs font-semibold">
+                                      {!match ? (
+                                        <span className="text-amber-500">Ausente no cofre</span>
+                                      ) : isDocExpired ? (
+                                        <span className="text-red-600 dark:text-red-400 font-bold">Vencido no cofre</span>
+                                      ) : (
+                                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">Em dia</span>
+                                      )}
+                                    </span>
+
+                                    {match && isDocExpired && (
+                                      <button
+                                        onClick={() => setDocumentToUpdate(match)}
+                                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-red-600 text-white hover:bg-red-700 shrink-0 min-h-[34px] cursor-pointer"
+                                      >
+                                        Renovar
+                                      </button>
+                                    )}
+                                    {match && !isDocExpired && (
+                                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" aria-hidden="true" />
+                                    )}
+                                    {!match && (
+                                      <button
+                                        onClick={() => setCurrentView('vault')}
+                                        className="text-xs font-bold text-teal-600 dark:text-teal-400 hover:underline"
+                                      >
+                                        Vincular no cofre
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               );
                             })}
@@ -336,11 +435,21 @@ export const ChecklistPage: React.FC = () => {
                   </div>
 
                   {/* Ação rápida da etapa */}
-                  <div className="shrink-0">
+                  <div className="shrink-0 flex items-center gap-2">
+                    {step.id === 'projeto' && (
+                      <button
+                        onClick={() => setCurrentView('formulario_projeto')}
+                        className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-teal-500/10 text-teal-700 dark:text-teal-300 hover:bg-teal-500/20 transition-colors min-h-[42px] flex items-center gap-1.5 cursor-pointer focus-ring border border-teal-500/20"
+                        title="Abrir formulário de projeto cultural em etapas"
+                      >
+                        <FileCheck className="w-3.5 h-3.5" />
+                        <span>Formulário de Projeto</span>
+                      </button>
+                    )}
                     {!isDocStep && !isEnvioStep && (
                       <button
                         onClick={() => toggleChecklistStep(step.id)}
-                        className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
+                        className="btn-secondary px-3.5 py-2 text-xs min-h-[42px] focus-ring"
                       >
                         {step.isCompleted ? 'Desmarcar' : 'Concluir'}
                       </button>
@@ -348,7 +457,7 @@ export const ChecklistPage: React.FC = () => {
                     {isDocStep && (
                       <button
                         onClick={() => setCurrentView('vault')}
-                        className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[#1C2647] dark:text-white transition-colors"
+                        className="btn-secondary px-3.5 py-2 text-xs min-h-[42px] focus-ring"
                       >
                         Ir ao cofre
                       </button>
@@ -356,25 +465,25 @@ export const ChecklistPage: React.FC = () => {
                     {isEnvioStep && !step.isCompleted && (
                       <button
                         onClick={submitApplicationForReview}
-                        className="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-[#25B2C5] text-[#1C2647] hover:bg-[#1FA0B2] transition-colors"
+                        className="btn-primary px-4 py-2 text-xs min-h-[42px] focus-ring"
                       >
                         Enviar
                       </button>
                     )}
                   </div>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
         </div>
       </div>
 
       {/* Esclarecimento de Envio Simulado */}
-      <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#141B33] text-xs text-slate-500 dark:text-slate-400 space-y-1">
-        <p className="font-semibold text-[#1C2647] dark:text-white">
-          Aviso sobre o envio para revisão
+      <div className="p-5 rounded-2xl border border-slate-200/80 dark:border-white/5 bg-slate-50 dark:bg-slate-900 text-xs text-slate-500 dark:text-slate-400 space-y-1">
+        <p className="font-semibold text-slate-900 dark:text-white">
+          Aviso sobre o envio para revisão simulada
         </p>
-        <p>
+        <p className="leading-relaxed">
           O botão "Enviar para revisão" executa uma simulação interna da plataforma para validação acadêmica do dossiê. Não substitui o envio oficial no sistema eletrônico do órgão público licitante.
         </p>
       </div>

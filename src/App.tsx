@@ -2,12 +2,18 @@ import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { BannerAviso } from './components/BannerAviso';
 import { Navbar } from './components/Navbar';
+import { Footer } from './components/Footer';
 import { HomePage } from './components/HomePage';
 import { CatalogPage } from './components/CatalogPage';
 import { GrantDetailPage } from './components/GrantDetailPage';
 import { VaultPage } from './components/VaultPage';
 import { ChecklistPage } from './components/ChecklistPage';
 import { PerformanceDashboard } from './components/PerformanceDashboard';
+import { GuiaArtistaPage } from './components/GuiaArtistaPage';
+import { ApoioArtistaPage } from './components/ApoioArtistaPage';
+import { ComoFuncionaPage } from './components/ComoFuncionaPage';
+import { FormularioProjetoPage } from './components/FormularioProjetoPage';
+import { PerfilConfigPage } from './components/PerfilConfigPage';
 import { PrepChoiceModal } from './components/PrepChoiceModal';
 import { AuthModal } from './components/AuthModal';
 import { ToastNotification } from './components/ToastNotification';
@@ -23,6 +29,11 @@ const MainContent: React.FC = () => {
       {currentView === 'vault' && <VaultPage />}
       {currentView === 'checklist' && <ChecklistPage />}
       {currentView === 'dashboard' && <PerformanceDashboard />}
+      {currentView === 'guia' && <GuiaArtistaPage />}
+      {currentView === 'apoio' && <ApoioArtistaPage />}
+      {currentView === 'como_funciona' && <ComoFuncionaPage />}
+      {currentView === 'formulario_projeto' && <FormularioProjetoPage />}
+      {currentView === 'perfil' && <PerfilConfigPage />}
     </main>
   );
 };
@@ -30,7 +41,7 @@ const MainContent: React.FC = () => {
 export default function App() {
   return (
     <AppProvider>
-      <div className="min-h-screen flex flex-col bg-[#F5F7FB] dark:bg-[#10162A] text-[#1C2647] dark:text-slate-100 transition-colors">
+      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
         {/* Banner de Aviso Acadêmico e Ações de Demonstração */}
         <BannerAviso />
 
@@ -41,6 +52,9 @@ export default function App() {
         <div className="flex-1">
           <MainContent />
         </div>
+
+        {/* Rodapé Global Estruturado */}
+        <Footer />
 
         {/* Modais Globais e Notificações Flutuantes */}
         <PrepChoiceModal />
